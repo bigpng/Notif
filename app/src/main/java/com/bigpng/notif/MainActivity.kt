@@ -1,6 +1,8 @@
 package com.bigpng.notif
 
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -42,15 +44,25 @@ import com.bigpng.notif.ui.theme.NotifTheme
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import android.text.format.DateFormat
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS,
+                    android.Manifest.permission.SCHEDULE_EXACT_ALARM),
+                0
+            )
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             NotifTheme {
+
                 MainScreen()
             }
         }
@@ -65,26 +77,26 @@ fun MainScreen() {
 
     var startTime by rememberSaveable { mutableStateOf(LocalTime.now()) }
     var endTime by rememberSaveable { mutableStateOf(LocalTime.now()) }
-    var interval by rememberSaveable { mutableStateOf(5) }
+    var interval by rememberSaveable { mutableIntStateOf(5) }
     var message by rememberSaveable { mutableStateOf("Stay hydrated!") }
     var enabled by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         startTime = LocalTime.of(
-            prefs.getInt("startHour", 9),
-            prefs.getInt("startMinute", 0)
+            prefs.getInt("startHour", LocalTime.now().hour),
+            prefs.getInt("startMinute", LocalTime.now().minute)
         )
         endTime = LocalTime.of(
-            prefs.getInt("endHour", 17),
-            prefs.getInt("endMinute", 0)
+            prefs.getInt("endHour", LocalTime.now().hour + 1),
+            prefs.getInt("endMinute", LocalTime.now().minute + 10)
         )
         interval = prefs.getInt("interval", 5)
         message = prefs.getString("message", "Stay hydrated!") ?: ""
         enabled = prefs.getBoolean("enabled", false)
     }
+    Column(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
 
-    Column(modifier = Modifier.padding(16.dp)) {
-        // Time pickers
+        Text(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")))
         TimePickerRow("Start Time", startTime) {
             startTime = it
             prefs.edit {
@@ -108,7 +120,7 @@ fun MainScreen() {
         }
 
         // Message input
-        OutlinedTextField(
+        TextField(
             value = message,
             onValueChange = {
                 message = it
@@ -127,6 +139,13 @@ fun MainScreen() {
             }
         ) {
             Text(if (enabled) "Disable Reminders" else "Enable Reminders")
+        }
+        Button(onClick = {
+            // Test immediate alarm
+            val intent = Intent(context, AlarmReceiver::class.java)
+            context.sendBroadcast(intent)
+        }) {
+            Text("Test Notification Now")
         }
     }
 }
@@ -205,7 +224,7 @@ fun TimePickerRow(label: String, time: LocalTime, onTimeChange: (LocalTime) -> U
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IntervalPicker(current: Int, onSelect: (Int) -> Unit) {
-    val intervals = listOf(5, 10, 15, 20, 25)
+    val intervals = listOf(1, 5, 10, 15, 20, 25)
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(

@@ -1,6 +1,7 @@
 package com.bigpng.notif
 
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,17 +10,32 @@ import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import compose.icons.TablerIcons
 import compose.icons.tablericons.Alarm
 import kotlin.random.Random
 
 class AlarmReceiver : BroadcastReceiver() {
+    @Suppress("DEPRECATION")
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         val message = prefs.getString("message", "Stay hydrated!") ?: ""
+
+        // Add this to wake device properly
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wakeLock = powerManager.newWakeLock(
+            PowerManager.FULL_WAKE_LOCK or
+                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    PowerManager.ON_AFTER_RELEASE,
+            "AppName::WakeLockTag"
+        )
+        wakeLock.acquire(60 * 1000L)
+
         showFullScreenNotification(context, message)
+        wakeLock.release()
     }
+
 
     @SuppressLint("ObsoleteSdkInt")
     private fun showFullScreenNotification(context: Context, message: String) {
@@ -30,11 +46,11 @@ class AlarmReceiver : BroadcastReceiver() {
             NotificationChannel(
                 "reminders",
                 "Reminders",
-                NotificationManager.IMPORTANCE_HIGH
+                NotificationManager.IMPORTANCE_HIGH  // Changed to MAX
             ).apply {
-                description = "Scheduled reminders"
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setSound(null, null)
+                enableVibration(false)
                 notificationManager.createNotificationChannel(this)
             }
         }
@@ -53,7 +69,7 @@ class AlarmReceiver : BroadcastReceiver() {
         )
 
         // Build notification
-        NotificationCompat.Builder(context, "reminders")
+        val notification = NotificationCompat.Builder(context, "reminders")
             .setSmallIcon(R.drawable.ic_launcher_background)
             .setContentTitle("Reminder")
             .setContentText(message)
@@ -64,6 +80,7 @@ class AlarmReceiver : BroadcastReceiver() {
             .setOngoing(true)
             .setTimeoutAfter(30000)
             .build()
-            .let { notificationManager.notify(Random.nextInt(), it) }
+
+        notificationManager.notify(Random.nextInt(), notification)
     }
 }
